@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Korean Time Quiz</title>
+  <style>
+    /* CSS from the template */
+    #hangeultts1 {
+      display: none;
+    }
+    #hangeultts2 {
+      display: none;
+    }
+    .content-row {
+      display: flex;
+      flex-direction: row;
+    }
+    .content-empty-column {
+      flex-grow: 1;
+    }
+    .all-content {
+      padding: 1rem;
+      background-color: #FFFFFF;
+      width: 400px;
+      border-radius: 5px;
+    }
+    .empty-row {
+      flex-grow: 1;
+      flex-basis: 0;
+      width: 100%;
+    }
+    .config-content {
+      padding: 1rem;
+      margin: 1rem;
+      border: 1px solid black;
+      background-color: #FFFFFF;
+      border-radius: 5px;
+    }
+    .quiz-content {
+      padding: 1rem;
+      margin: 1rem;
+      border: 1px solid black;
+      background-color: #FFFFFF;
+      border-radius: 5px;
+    }
+    .notes-content {
+      padding: 1rem;
+      margin: 1rem;
+      border: 1px solid black;
+      background-color: #FFFFFF;
+      border-radius: 5px;
+      display: none;
+    }
+    .centered-content {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #question {
+      min-height: 100px;
+    }
+    #answer-container {
+      min-height: 100px;
+    }
+    #answers {
+      display: none;
+    }
+    .pointer {
+      cursor: pointer;
+    }
+    .small-font {
+      font-size: 0.85rem;
+    }
+    .centered {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+  </style>
+  <!-- jQuery is required by the JavaScript code -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+  <div class="empty-row"></div>
+  <div class="content-row">
+    <div class="content-empty-column"></div>
+    <div class="all-content">
+      <div class="config-content">
+        <!--
+        <input type="checkbox" id="clock12" checked="checked">
+        <label for="clock12" class="small-font">Limit to 12 hour clock</label><br>
+        -->
+        <input type="checkbox" id="hideseconds" checked="checked">
+        <label for="hideseconds" class="small-font">Hide seconds</label><br>
+        <input type="checkbox" id="autoread">
+        <label for="autoread" class="small-font">Auto read-out</label><br>
+      </div>
+
+      <div class="quiz-content">
+        <div class="centered-content">
+          <button onclick="generateQuestion();">Quiz Me!</button>
+        </div>
+        <div class="centered-content" id="question">
+          <div id="time"></div>
+        </div>
+        <div class="centered-content">
+          <button onclick="generateAnswer();">Show Answer</button>
+        </div>
+        <div class="centered-content" id="answer-container">
+          <div id="answers">
+            <div id="answer1">
+              <span id="hangeultime1"></span>
+              <span onclick="readText('hangeultts1')" class="pointer">🔊</span>
+              <span>&nbsp;</span>
+              <span onclick="toggleNotes();" id="showNotes" class="pointer">ⓘ</span>
+            </div>
+            <div id="hangeultts"></div>
+            <div id="answer2">
+              <span>ALT: </span>
+              <span id="hangeultime2"></span>
+              <span onclick="readText('hangeultts2')" class="pointer">🔊</span>
+            </div>
+            <div id="hangeultts1"></div>
+            <div id="hangeultts2"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes-content" id="notes-content">
+        <div id="hangeulnotes" class="small-font"></div>
+      </div>
+      
+    </div>
+    <div class="content-empty-column"></div>
+  </div>
+  <div class="empty-row"></div>
+
+  <script>
+    function* breakdownNumber(n) {
+        let sNumber = n.toString();
+
+        for (let i = 0, len = sNumber.length; i < len; i += 1) {
+            let idx = sNumber.length - i - 1;
+            yield [+sNumber.charAt(idx), i, idx];
+        }
+    }
+
+    function* transformGenerator(generator, transformation) {
+      for (const item of generator) {
+        yield transformation(...item);
+      }
+    }
+
+    function digitToSinoText(digit) {
+        const hangeul = ['영', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구', ''];
+        return hangeul[digit];
+    }
+
+    function digitToNativeText(digit, counterFollows=false) {
+        const counter_follows = ['영', '한', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉', '열'];
+        const no_counter = ['영', '한나', '둘', '셋', '넷', '다섯', '여섯', '일곱', '여덟', '아홉', '열'];
+        return counterFollows ? counter_follows[digit] : no_counter[digit];
+    }
+
+    function indexToNativeText(digit, counterFollows=false) {
+        const hangeul = ['', '열', '스물 ', '서른 ', '마흔 ', '쉰 ', '예순 ', '일흔 ', '여든 ', '아흔 ', '온 '];
+        // 스물 special case
+        if (digit == 2 && counterFollows)
+            return '스무'
+        return hangeul[digit];
+    }
+
+    function indexToSinoText(index_from_right) {
+        const hangeul = ['', '십', '백', '천', '만'];
+        return hangeul[index_from_right];
+    }
+
+    function indexedDigitToNativeText(digit, index_from_right, n_digits_remaining, counterFollows=false) {
+        if (index_from_right == 0) {
+            if (!(n_digits_remaining && digit==0))
+                return digitToNativeText(digit, counterFollows);
+        } else if (digit > 1) {
+            return indexToNativeText(digit);
+        } else if (digit == 1) {
+            return indexToNativeText(index_from_right);
+        }
+        return '';
+    }
+
+    function indexedDigitToSinoText(digit, index_from_right, n_digits_remaining) {
+        if (index_from_right == 0) {
+            if (!(n_digits_remaining && digit==0))
+                return digitToSinoText(digit);
+        } else if (digit > 1 || index_from_right == 0) {
+            return digitToSinoText(digit) + indexToSinoText(index_from_right);
+        } else if (digit == 1) {
+            return indexToSinoText(index_from_right);
+        }
+        return '';
+    }
+
+    function notesForNumber(numberText) {
+        let notes = [];
+        if (numberText.includes('한')) {
+            notes.push('When used before a counter word or noun, 하나 (one) is written as 한.');
+        }
+        if (numberText.includes('두')) {
+            notes.push('When used before a counter word or noun, 둘 (two) is written as 두.');
+        }
+        if (numberText.includes('세')) {
+            notes.push('When used before a counter word or noun, 셋 (three) is written as 세.');
+        }
+        if (numberText.includes('네')) {
+            notes.push('When used before a counter word or noun, 넷 (four) is written as 네.');
+        }
+        return notes;
+    }
+
+    function numberToNative(n, counterFollows=true, spacing='') {
+        if (n<0 || n>100)
+            throw new Error('Number out of native range');
+
+        let gn = breakdownNumber(n);
+        let tgn = transformGenerator(gn, (d,i,n) => indexedDigitToNativeText(d,i,n,counterFollows=counterFollows));
+
+        return [...tgn].reverse().join(spacing).trim();
+    }
+
+    function numberToSino(n, spacing='') {
+        if (n<0 || n>9999)
+            throw new Error('Number out of native range');
+
+        let gn = breakdownNumber(n);
+        let tgn = transformGenerator(gn, indexedDigitToSinoText);
+
+        return [...tgn].reverse().join(spacing).trim();
+    }
+
+    function ttsForSinoNumber(str) {
+        if (str.includes('만')) {
+            return str.replace('만','만, ');
+        } else if (str.includes('백') && str.length > 3) {
+            return str.replace('백', '백, ');
+        }
+        return str;
+    }    
+    // JavaScript from the template
+    let questionHours = 0;
+    let questionMinutes = 0;
+    let questionSeconds = 0;
+    let is12Hour = false;
+    let isPM = false;
+    let answerHangeul = "";
+
+    function padZero(num, digitsRequired) {
+      return (num + "").padStart(digitsRequired, "0");
+    }
+
+    function use12HourClock() {
+      return true;
+      let clock12 = document.getElementById("clock12");
+      return clock12.checked;
+    }
+
+    function timeToHangeul(hours, minutes, seconds) {
+      let hours_text = '';
+      let hours_tts = '';
+      if (use12HourClock()) {
+        hours_text += isPM ? '오후 ' : '오전 ';
+        hours_tts += isPM ? '오후 ' : '오전 ';
+      }
+      hours_text += numberToNative(hours, true) + ' 시 ';
+      hours_tts += numberToNative(hours, true, " ") + ' 시 ';
+
+      let minutes_text = '';
+      let minutes_tts = '';
+      if (minutes > 0) {
+        minutes_text += ' ' + numberToSino(minutes) + '분 ';
+        minutes_tts += ', ' + numberToSino(minutes, " ") + '분, ';
+      }
+
+      let seconds_text = '';
+      let seconds_tts = '';
+      let hideseconds = document.getElementById("hideseconds");
+      if (!hideseconds.checked && seconds > 0) {
+        seconds_text += numberToSino(seconds) + '초';
+        seconds_tts += numberToSino(seconds, " ") + '초';
+      }
+
+      if (minutes == 30) {
+        let answer1 = hours_text + minutes_text + seconds_text;
+        let tts1 = hours_tts + minutes_tts + seconds_tts;
+        let answer2 = hours_text + ' 반 ' + seconds_text;
+        let tts2 = hours_tts + ' 반 ' + seconds_tts;
+        return [[answer1, answer2], [tts1, tts2]];
+      } else {
+        return [[hours_text + minutes_text + seconds_text], [hours_tts + minutes_tts + seconds_tts]];
+      }
+    }
+
+    function generateRandomTime() {
+      let hours = Math.floor(Math.random() * 24);
+      let minutes = Math.floor(Math.random() * 60);
+      let seconds = Math.floor(Math.random() * 60);
+
+      switch (Math.floor(Math.random() * 10)) {
+        case 0:
+          minutes = 0;
+          break;
+        case 1:
+          minutes = 30;
+          break;
+        default:
+      }
+
+      if (use12HourClock()) {
+        isPM = hours >= 12;
+        hours = hours % 12;
+        if (hours === 0) {
+          hours = 12;
+        }
+      }
+
+      return [hours, minutes, seconds];
+    }
+
+    function generateQuestion() {
+      $("#notes-content").hide();
+      [questionHours, questionMinutes, questionSeconds] = generateRandomTime();
+
+      let hideseconds = document.getElementById("hideseconds");
+      let timestr = "";
+      if (hideseconds.checked) {
+        timestr = questionHours + ":" + padZero(questionMinutes, 2);
+      } else {
+        timestr = questionHours + ":" + padZero(questionMinutes, 2) + ":" + padZero(questionSeconds, 2);
+      }
+      if (use12HourClock()) {
+        timestr += isPM ? ' PM' : ' AM';
+      }
+      document.getElementById("time").innerHTML = timestr;
+      showAnswer(false);
+      $("#showNotes").hide();
+    }
+
+    function generateNotes(hangeulnumber) {
+      let notes = notesForNumber(hangeulnumber);
+      if (notes.length > 0) {
+        document.getElementById("hangeulnotes").innerText = notes.join('<br>');
+        $("#showNotes").show();
+      } else {
+        $("#showNotes").hide();
+      }
+    }
+
+    function generateAnswer() {
+      let result = timeToHangeul(questionHours, questionMinutes, questionSeconds);
+      let hangeulAnswers = result[0];
+      let hangeulTTS = result[1];
+
+      answerHangeul = hangeulAnswers[0];
+      let ttsHangeul = hangeulTTS[0];
+      document.getElementById("hangeultime1").innerHTML = answerHangeul;
+      document.getElementById("hangeultts1").innerHTML = ttsHangeul;
+
+      if (hangeulAnswers.length > 1) {
+        document.getElementById("hangeultime2").innerHTML = hangeulAnswers[1];
+        document.getElementById("hangeultts2").innerHTML = hangeulTTS[1];
+        $("#answer2").show();
+      } else {
+        $("#answer2").hide();
+      }
+
+      showAnswer(true);
+      generateNotes(answerHangeul);
+      let autoread = document.getElementById("autoread");
+      if (autoread.checked) {
+        readText('hangeultts1');
+      }
+    }
+
+    function readText(elementId) {
+      const text = document.getElementById(elementId).innerText;
+      const speech = new SpeechSynthesisUtterance(text);
+      speech.lang = "ko-KR";
+      window.speechSynthesis.speak(speech);
+    }
+
+    function showAnswer(show) {
+      if (show) {
+        $("#answers").show();
+      } else {
+        $("#answers").hide();
+      }
+    }
+
+    function toggleNotes() {
+      $("#notes-content").toggle();
+    }
+  </script>
+</body>
+</html>
